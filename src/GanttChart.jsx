@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 
-const ROW_H = 44, NAME_W = 220, HEADER_H = 72;
+const ROW_H = 44, NAME_W = 440, HEADER_H = 72;
+// NAME_W layout: 0-14 handle | 16-162 name | 165-277 start date | 281-393 end/dur | 414+ delete
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 const VIEW_CONFIG = {
@@ -317,6 +318,7 @@ export default function GanttChart() {
   const [hoveredId, setHoveredId] = useState(null);
   const [dragging,  setDragging]  = useState(null);
   const [reordering, setReordering] = useState(null); // { id, fromIdx, curIdx, sy }
+  const [dateMode,   setDateMode]   = useState("end"); // "end" | "dur"
   const [xlsxReady, setXlsxReady] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [projects,  setProjects]  = useState(() => ({
@@ -423,6 +425,21 @@ export default function GanttChart() {
   const addTask   = () => { const ci = nid % COLORS.length; setTasks(p => [...p, { id: nid++, name:"New Task", start: new Date(today), end: addDays(today, view === "quarter" ? 60 : view === "month" ? 20 : view === "week" ? 14 : 5), ci }]); };
   const delTask   = id => setTasks(p => p.filter(t => t.id !== id));
   const clrTask   = id => setTasks(p => p.map(t => t.id === id ? { ...t, ci:(t.ci + 1) % COLORS.length } : t));
+
+  const updateTaskDate = useCallback((id, field, val) => {
+    const d = new Date(val + "T00:00:00");
+    if (isNaN(d)) return;
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      if (field === "start") return { ...t, start: d, end: d > t.end ? new Date(d) : t.end };
+      return { ...t, end: d, start: d < t.start ? new Date(d) : t.start };
+    }));
+  }, []);
+
+  const updateTaskDur = useCallback((id, val) => {
+    const days = Math.max(1, parseInt(val) || 1);
+    setTasks(prev => prev.map(t => t.id !== id ? t : { ...t, end: addDays(t.start, days) }));
+  }, []);
 
   const handleExport = async () => {
     if (!xlsxReady || !window.XLSX) return;
@@ -540,6 +557,10 @@ export default function GanttChart() {
         .xbtn:hover { filter:brightness(1.2); transform:translateY(-1px) }
         .ver-row:hover  { background:#1e1e30 !important }
         .proj-row:hover { background:#1a1a28 !important }
+        .di { background:#1a1a2e; border:1px solid #2a2a4a; border-radius:5px; color:#d1d5db; font-size:11px; font-family:'DM Sans',sans-serif; padding:2px 5px; outline:none; width:100%; height:100%; box-sizing:border-box }
+        .di:focus { border-color:#6366f1 }
+        .di::-webkit-calendar-picker-indicator { filter:invert(0.4); cursor:pointer; padding:0; margin:0 }
+        .di::-webkit-inner-spin-button { opacity:0.4 }
       `}</style>
 
       {/* ── Top bar ── */}
@@ -709,9 +730,18 @@ export default function GanttChart() {
             {/* Name col */}
             <rect x={0} y={0} width={NAME_W} height={totalH} fill="#13131a" />
             <line x1={NAME_W} y1={0} x2={NAME_W} y2={totalH} stroke="#23233a" strokeWidth={1.5} />
+            {/* Name-panel column dividers (below header) */}
+            <line x1={165} y1={HEADER_H} x2={165} y2={totalH} stroke="#1e1e2a" strokeWidth={1} />
+            <line x1={281} y1={HEADER_H} x2={281} y2={totalH} stroke="#1e1e2a" strokeWidth={1} />
             {/* Month row */}
             <rect x={0} y={0} width={totalW} height={32} fill="#0d0d14" />
             <text x={16} y={21} fill="#4b5563" fontSize={11} fontFamily="'Space Grotesk'" fontWeight={600} letterSpacing=".5px">TASK</text>
+            <text x={181} y={21} fill="#374151" fontSize={9} fontFamily="'Space Grotesk'" fontWeight={600} letterSpacing=".5px">START</text>
+            <g style={{ cursor:"pointer" }} onClick={() => setDateMode(m => m === "end" ? "dur" : "end")}>
+              <text x={295} y={21} fill="#6366f1" fontSize={9} fontFamily="'Space Grotesk'" fontWeight={600} letterSpacing=".5px">
+                {dateMode === "end" ? "END DATE ▾" : "DURATION ▾"}
+              </text>
+            </g>
             {groups.map((g, i) => (
               <text key={i} x={NAME_W + g.start*cellW + 10} y={21} fill="#6b7280" fontSize={11} fontFamily="'Space Grotesk'" fontWeight={600} letterSpacing="1px">
                 {g.label.toUpperCase()}
@@ -752,7 +782,7 @@ export default function GanttChart() {
                     <rect x={3} y={y+27} width={11} height={2} rx={1} fill="#9ca3af" />
                   </g>
                   {editingId === task.id ? (
-                    <foreignObject x={10} y={y+10} width={NAME_W-20} height={ROW_H-20}>
+                    <foreignObject x={10} y={y+10} width={148} height={ROW_H-20}>
                       <input ref={inputRef} value={editName}
                         onChange={e => setEditName(e.target.value)}
                         onBlur={commit}
@@ -766,6 +796,20 @@ export default function GanttChart() {
                       {task.name.length > 18 ? task.name.slice(0,17) + "…" : task.name}
                     </text>
                   )}
+                  {/* Date inputs */}
+                  <foreignObject x={166} y={y+8} width={112} height={28}>
+                    <input type="date" className="di" value={fmtISO(task.start)}
+                      onChange={e => updateTaskDate(task.id, "start", e.target.value)} />
+                  </foreignObject>
+                  <foreignObject x={282} y={y+8} width={112} height={28}>
+                    {dateMode === "end" ? (
+                      <input type="date" className="di" value={fmtISO(task.end)}
+                        onChange={e => updateTaskDate(task.id, "end", e.target.value)} />
+                    ) : (
+                      <input type="number" className="di" min="1" value={diffDays(task.start, task.end)}
+                        onChange={e => updateTaskDur(task.id, e.target.value)} />
+                    )}
+                  </foreignObject>
                   <g className="del-btn" style={{ opacity:0, cursor:"pointer" }} onClick={() => delTask(task.id)}>
                     <rect x={NAME_W-26} y={y + ROW_H/2-10} width={20} height={20} rx={4} fill="#2a1f1f" />
                     <text x={NAME_W-16} y={y + ROW_H/2+5} textAnchor="middle" fill="#ef4444" fontSize={14}>×</text>
@@ -801,7 +845,7 @@ export default function GanttChart() {
 
         <div style={{ display:"flex", gap:16, marginTop:14, padding:"0 4px", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center" }}>
           <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
-            {[["⟺","Drag"], ["↕","Reorder"], ["◂▸","Resize"], ["✎","Rename"], ["●","Color"], ["💾","Save version"], ["🗂","Projects"]].map(([icon, text], i) => (
+            {[["⟺","Drag"], ["↕","Reorder"], ["◂▸","Resize"], ["✎","Rename"], ["📅","Dates (click END DATE/DURATION to toggle)"], ["●","Color"], ["💾","Save version"], ["🗂","Projects"]].map(([icon, text], i) => (
               <div key={i} style={{ display:"flex", alignItems:"center", gap:5, color:"#4b5563", fontSize:11 }}>
                 <span style={{ color:"#6366f1" }}>{icon}</span>{text}
               </div>
