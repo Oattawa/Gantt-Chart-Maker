@@ -21,6 +21,37 @@ const COLORS = [
   { bg:"#14b8a6", light:"#2dd4bf", name:"Teal"    },
 ];
 
+const THEMES = {
+  dark: {
+    page:"#0f0f13", card:"#16161d", namePanel:"#13131a",
+    hdrTop:"#0d0d14", hdrBot:"#0f0f18",
+    border:"#1e1e2e", borderStrong:"#23233a",
+    grid:"#1a1a24", rowSep:"#1e1e2a", colDiv:"#1e1e2a",
+    todayCol:"#1a1040", weekendCol:"#131318", hoverRow:"#ffffff05",
+    txtPrimary:"#fff", txtTask:"#c4c4d4", txtMuted:"#4b5563",
+    txtFaint:"#374151", txtVeryFaint:"#2d3748", txtGroup:"#6b7280",
+    delBg:"#2a1f1f", delFg:"#ef4444", handle:"#9ca3af", addTask:"#374151",
+    inBg:"#1a1a2e", inBorder:"#2a2a4a", inFg:"#d1d5db",
+    scrollBg:"#1a1a22", scrollThumb:"#333",
+    schNameBg:"#0f0f18", schNameBorder:"#1e1e2e",
+    schNameText:"#e5e7eb", schNameSub:"#4b5563",
+  },
+  light: {
+    page:"#f0f4f8", card:"#ffffff", namePanel:"#f8fafd",
+    hdrTop:"#f0f4f8", hdrBot:"#f5f7fb",
+    border:"#e2e8f0", borderStrong:"#cbd5e1",
+    grid:"#e2e8f0", rowSep:"#eff2f6", colDiv:"#e2e8f0",
+    todayCol:"#eef2ff", weekendCol:"#f7f8fa", hoverRow:"#00000008",
+    txtPrimary:"#111827", txtTask:"#374151", txtMuted:"#6b7280",
+    txtFaint:"#9ca3af", txtVeryFaint:"#d1d5db", txtGroup:"#94a3b8",
+    delBg:"#fee2e2", delFg:"#dc2626", handle:"#94a3b8", addTask:"#94a3b8",
+    inBg:"#ffffff", inBorder:"#d1d5db", inFg:"#374151",
+    scrollBg:"#e5e9f0", scrollThumb:"#b0bac9",
+    schNameBg:"#f5f7fb", schNameBorder:"#e2e8f0",
+    schNameText:"#111827", schNameSub:"#6b7280",
+  },
+};
+
 // ── Date utils ──────────────────────────────────────────────────────────────
 function addDays(d, n)   { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function addMonths(d, n) { return new Date(d.getFullYear(), d.getMonth() + n, 1); }
@@ -317,8 +348,14 @@ export default function GanttChart() {
   const [editName,  setEditName]  = useState("");
   const [hoveredId, setHoveredId] = useState(null);
   const [dragging,  setDragging]  = useState(null);
-  const [reordering, setReordering] = useState(null); // { id, fromIdx, curIdx, sy }
-  const [dateMode,   setDateMode]   = useState("end"); // "end" | "dur"
+  const [reordering,    setReordering]    = useState(null); // { id, fromIdx, curIdx, sy }
+  const [dateMode,      setDateMode]      = useState("end"); // "end" | "dur"
+  const [theme,         setTheme]         = useState("dark"); // "dark" | "light"
+  const [scheduleName,  setScheduleName]  = useState("My Schedule");
+  const [editingSched,  setEditingSched]  = useState(false);
+  const [schedDraft,    setSchedDraft]    = useState("");
+  const schedInputRef = useRef(null);
+  const T = THEMES[theme];
   const [xlsxReady, setXlsxReady] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [projects,  setProjects]  = useState(() => ({
@@ -543,12 +580,12 @@ export default function GanttChart() {
   const versions  = (projects[activeProject] && projects[activeProject].versions) ? projects[activeProject].versions : [];
 
   return (
-    <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:"#0f0f13", minHeight:"100vh", padding:"24px 0" }}>
+    <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:T.page, minHeight:"100vh", padding:"24px 0", transition:"background .25s" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
         * { box-sizing:border-box }
-        ::-webkit-scrollbar { height:6px; width:6px; background:#1a1a22 }
-        ::-webkit-scrollbar-thumb { background:#333; border-radius:3px }
+        ::-webkit-scrollbar { height:6px; width:6px; background:${T.scrollBg} }
+        ::-webkit-scrollbar-thumb { background:${T.scrollThumb}; border-radius:3px }
         .task-row:hover .del-btn { opacity:1 !important }
         .bh { cursor:ew-resize; opacity:0; transition:opacity .15s }
         .bg:hover .bh { opacity:1 }
@@ -557,9 +594,9 @@ export default function GanttChart() {
         .xbtn:hover { filter:brightness(1.2); transform:translateY(-1px) }
         .ver-row:hover  { background:#1e1e30 !important }
         .proj-row:hover { background:#1a1a28 !important }
-        .di { background:#1a1a2e; border:1px solid #2a2a4a; border-radius:5px; color:#d1d5db; font-size:11px; font-family:'DM Sans',sans-serif; padding:2px 5px; outline:none; width:100%; height:100%; box-sizing:border-box }
+        .di { background:${T.inBg}; border:1px solid ${T.inBorder}; border-radius:5px; color:${T.inFg}; font-size:11px; font-family:'DM Sans',sans-serif; padding:2px 5px; outline:none; width:100%; height:100%; box-sizing:border-box }
         .di:focus { border-color:#6366f1 }
-        .di::-webkit-calendar-picker-indicator { filter:invert(0.4); cursor:pointer; padding:0; margin:0 }
+        .di::-webkit-calendar-picker-indicator { filter:${theme==="dark"?"invert(0.4)":"invert(0.6)"}; cursor:pointer; padding:0; margin:0 }
         .di::-webkit-inner-spin-button { opacity:0.4 }
       `}</style>
 
@@ -567,18 +604,18 @@ export default function GanttChart() {
       <div style={{ maxWidth:1120, margin:"0 auto", padding:"0 24px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
         <div style={{ display:"flex", alignItems:"center", gap:14 }}>
           <div>
-            <h1 style={{ color:"#fff", margin:0, fontSize:22, fontFamily:"'Space Grotesk'", letterSpacing:"-0.5px" }}>📅 Gantt Timeline</h1>
-            <p style={{ color:"#4b5563", margin:"3px 0 0", fontSize:12 }}>Drag · Resize · Double-click to rename</p>
+            <h1 style={{ color:T.txtPrimary, margin:0, fontSize:22, fontFamily:"'Space Grotesk'", letterSpacing:"-0.5px" }}>📅 Gantt Timeline</h1>
+            <p style={{ color:T.txtMuted, margin:"3px 0 0", fontSize:12 }}>Drag · Resize · Double-click to rename</p>
           </div>
-          <button onClick={() => setShowPanel(p => !p)} style={{ background:"#1a1a2e", border:"1px solid #2a2a4a", borderRadius:10, color:"#a5b4fc", padding:"7px 14px", cursor:"pointer", fontFamily:"'Space Grotesk'", fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
-            🗂 {activeProject} <span style={{ color:"#4b5563", fontSize:10 }}>▾</span>
+          <button onClick={() => setShowPanel(p => !p)} style={{ background:T.inBg, border:`1px solid ${T.inBorder}`, borderRadius:10, color:"#a5b4fc", padding:"7px 14px", cursor:"pointer", fontFamily:"'Space Grotesk'", fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+            🗂 {activeProject} <span style={{ color:T.txtMuted, fontSize:10 }}>▾</span>
           </button>
         </div>
 
         <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-          <div style={{ display:"flex", gap:3, background:"#13131a", borderRadius:10, padding:4, border:"1px solid #1e1e2e" }}>
+          <div style={{ display:"flex", gap:3, background:T.namePanel, borderRadius:10, padding:4, border:`1px solid ${T.border}` }}>
             {["day","week","month","quarter"].map(v => (
-              <button key={v} onClick={() => setView(v)} style={{ ...(view === v ? activeS : inactiveS), borderRadius:7, padding:"7px 14px", cursor:"pointer", fontFamily:"'Space Grotesk'", fontSize:12, fontWeight:600, transition:"all .2s" }}>
+              <button key={v} onClick={() => setView(v)} style={{ ...(view === v ? activeS : { background:T.inBg, border:`1px solid ${T.inBorder}`, color:T.txtMuted }), borderRadius:7, padding:"7px 14px", cursor:"pointer", fontFamily:"'Space Grotesk'", fontSize:12, fontWeight:600, transition:"all .2s" }}>
                 {v[0].toUpperCase() + v.slice(1)}
               </button>
             ))}
@@ -586,8 +623,12 @@ export default function GanttChart() {
           <button onClick={addTask} style={{ background:"linear-gradient(135deg,#6366f1,#8b5cf6)", border:"none", borderRadius:10, color:"#fff", padding:"9px 16px", cursor:"pointer", fontFamily:"'Space Grotesk'", fontSize:13, fontWeight:600, boxShadow:"0 4px 16px rgba(99,102,241,.4)" }}>
             + Task
           </button>
-          <button onClick={() => setSavingAs(p => !p)} style={{ background:"#1a1a2e", border:"1px solid #2a2a4a", borderRadius:10, color:"#a5b4fc", padding:"9px 16px", cursor:"pointer", fontFamily:"'Space Grotesk'", fontSize:13, fontWeight:600 }}>
+          <button onClick={() => setSavingAs(p => !p)} style={{ background:T.inBg, border:`1px solid ${T.inBorder}`, borderRadius:10, color:"#a5b4fc", padding:"9px 16px", cursor:"pointer", fontFamily:"'Space Grotesk'", fontSize:13, fontWeight:600 }}>
             💾 Save
+          </button>
+          <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
+            style={{ background: theme === "dark" ? "#1a1a2e" : "#f0f4f8", border: theme === "dark" ? "1px solid #2a2a4a" : "1px solid #cbd5e1", borderRadius:10, color: theme === "dark" ? "#fbbf24" : "#6366f1", padding:"9px 14px", cursor:"pointer", fontFamily:"'Space Grotesk'", fontSize:13, fontWeight:600 }}>
+            {theme === "dark" ? "☀︎" : "☾"}
           </button>
           <button className="xbtn" onClick={handleExport} disabled={exporting || !xlsxReady}
             style={{ background:"linear-gradient(135deg,#047857,#10b981)", border:"none", borderRadius:10, color:"#fff", padding:"9px 16px", cursor: (exporting || !xlsxReady) ? "not-allowed" : "pointer", fontFamily:"'Space Grotesk'", fontSize:13, fontWeight:600, boxShadow:"0 4px 16px rgba(16,185,129,.35)", display:"flex", alignItems:"center", gap:6, transition:"all .2s", opacity: xlsxReady ? 1 : 0.6 }}>
@@ -715,7 +756,23 @@ export default function GanttChart() {
 
       {/* ── Gantt ── */}
       <div style={{ maxWidth:1120, margin:"0 auto", padding:"0 24px" }}>
-        <div style={{ background:"#16161d", borderRadius:16, border:"1px solid #1e1e2e", overflow:"hidden", boxShadow:"0 20px 60px rgba(0,0,0,.5)" }}>
+        <div style={{ background:T.card, borderRadius:16, border:`1px solid ${T.border}`, overflow:"hidden", boxShadow:"0 20px 60px rgba(0,0,0,.3)" }}>
+          {/* Schedule name header */}
+          <div style={{ background:T.schNameBg, borderBottom:`1px solid ${T.schNameBorder}`, padding:"12px 20px", display:"flex", alignItems:"center", gap:10 }}>
+            {editingSched ? (
+              <input ref={schedInputRef} value={schedDraft}
+                onChange={e => setSchedDraft(e.target.value)}
+                onBlur={() => { setScheduleName(schedDraft.trim() || scheduleName); setEditingSched(false); }}
+                onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") { setScheduleName(schedDraft.trim() || scheduleName); setEditingSched(false); } }}
+                style={{ background:"transparent", border:"none", borderBottom:`2px solid #6366f1`, color:T.schNameText, fontSize:18, fontFamily:"'Space Grotesk'", fontWeight:700, outline:"none", minWidth:180, letterSpacing:"-0.3px" }} />
+            ) : (
+              <span onDoubleClick={() => { setSchedDraft(scheduleName); setEditingSched(true); setTimeout(() => schedInputRef.current && schedInputRef.current.focus(), 30); }}
+                style={{ color:T.schNameText, fontSize:18, fontFamily:"'Space Grotesk'", fontWeight:700, letterSpacing:"-0.3px", cursor:"text" }}>
+                {scheduleName}
+              </span>
+            )}
+            <span style={{ color:T.schNameSub, fontSize:11, fontFamily:"'DM Sans'" }}>· double-click to rename</span>
+          </div>
           <div style={{ overflowX:"auto" }}>
           <svg width={totalW} height={totalH} style={{ display:"block" }}>
             {/* Column BG */}
@@ -723,33 +780,33 @@ export default function GanttChart() {
               const x = NAME_W + i * cellW;
               const isWE = view === "day" && (u.date.getDay() === 0 || u.date.getDay() === 6);
               const isTd = Math.floor(todayF) === i;
-              return <rect key={i} x={x} y={HEADER_H} width={cellW} height={totalH - HEADER_H} fill={isTd ? "#1a1040" : isWE ? "#131318" : "transparent"} opacity={isTd ? 0.6 : 1} />;
+              return <rect key={i} x={x} y={HEADER_H} width={cellW} height={totalH - HEADER_H} fill={isTd ? T.todayCol : isWE ? T.weekendCol : "transparent"} opacity={isTd ? 0.6 : 1} />;
             })}
             {/* Grid */}
-            {units.map((_, i) => <line key={i} x1={NAME_W + i*cellW} y1={0} x2={NAME_W + i*cellW} y2={totalH} stroke="#1a1a24" strokeWidth={1} />)}
-            {tasks.map((_, i) => <line key={i} x1={0} y1={HEADER_H + (i+1)*ROW_H} x2={totalW} y2={HEADER_H + (i+1)*ROW_H} stroke="#1e1e2a" strokeWidth={1} />)}
+            {units.map((_, i) => <line key={i} x1={NAME_W + i*cellW} y1={0} x2={NAME_W + i*cellW} y2={totalH} stroke={T.grid} strokeWidth={1} />)}
+            {tasks.map((_, i) => <line key={i} x1={0} y1={HEADER_H + (i+1)*ROW_H} x2={totalW} y2={HEADER_H + (i+1)*ROW_H} stroke={T.rowSep} strokeWidth={1} />)}
             {/* Name col */}
-            <rect x={0} y={0} width={NAME_W} height={totalH} fill="#13131a" />
-            <line x1={NAME_W} y1={0} x2={NAME_W} y2={totalH} stroke="#23233a" strokeWidth={1.5} />
+            <rect x={0} y={0} width={NAME_W} height={totalH} fill={T.namePanel} />
+            <line x1={NAME_W} y1={0} x2={NAME_W} y2={totalH} stroke={T.borderStrong} strokeWidth={1.5} />
             {/* Name-panel column dividers (below header) */}
-            <line x1={165} y1={HEADER_H} x2={165} y2={totalH} stroke="#1e1e2a" strokeWidth={1} />
-            <line x1={281} y1={HEADER_H} x2={281} y2={totalH} stroke="#1e1e2a" strokeWidth={1} />
+            <line x1={165} y1={HEADER_H} x2={165} y2={totalH} stroke={T.colDiv} strokeWidth={1} />
+            <line x1={281} y1={HEADER_H} x2={281} y2={totalH} stroke={T.colDiv} strokeWidth={1} />
             {/* Month row */}
-            <rect x={0} y={0} width={totalW} height={32} fill="#0d0d14" />
-            <text x={16} y={21} fill="#4b5563" fontSize={11} fontFamily="'Space Grotesk'" fontWeight={600} letterSpacing=".5px">TASK</text>
-            <text x={181} y={21} fill="#374151" fontSize={9} fontFamily="'Space Grotesk'" fontWeight={600} letterSpacing=".5px">START</text>
+            <rect x={0} y={0} width={totalW} height={32} fill={T.hdrTop} />
+            <text x={16} y={21} fill={T.txtMuted} fontSize={11} fontFamily="'Space Grotesk'" fontWeight={600} letterSpacing=".5px">TASK</text>
+            <text x={181} y={21} fill={T.txtFaint} fontSize={9} fontFamily="'Space Grotesk'" fontWeight={600} letterSpacing=".5px">START</text>
             <g style={{ cursor:"pointer" }} onClick={() => setDateMode(m => m === "end" ? "dur" : "end")}>
               <text x={295} y={21} fill="#6366f1" fontSize={9} fontFamily="'Space Grotesk'" fontWeight={600} letterSpacing=".5px">
                 {dateMode === "end" ? "END DATE ▾" : "DURATION ▾"}
               </text>
             </g>
             {groups.map((g, i) => (
-              <text key={i} x={NAME_W + g.start*cellW + 10} y={21} fill="#6b7280" fontSize={11} fontFamily="'Space Grotesk'" fontWeight={600} letterSpacing="1px">
+              <text key={i} x={NAME_W + g.start*cellW + 10} y={21} fill={T.txtGroup} fontSize={11} fontFamily="'Space Grotesk'" fontWeight={600} letterSpacing="1px">
                 {g.label.toUpperCase()}
               </text>
             ))}
             {/* Unit header */}
-            <rect x={0} y={32} width={totalW} height={40} fill="#0f0f18" />
+            <rect x={0} y={32} width={totalW} height={40} fill={T.hdrBot} />
             {units.map((u, i) => {
               const x = NAME_W + i * cellW;
               const isTU = Math.floor(todayF) === i;
@@ -757,8 +814,8 @@ export default function GanttChart() {
               return (
                 <g key={i}>
                   {isTU && <rect x={x+2} y={34} width={cellW-4} height={36} rx={6} fill="#3730a3" opacity={0.6} />}
-                  <text x={x + cellW/2} y={52} textAnchor="middle" fill={isTU ? "#a5b4fc" : isWE ? "#374151" : "#4b5563"} fontSize={view === "quarter" ? 14 : 11} fontFamily="'DM Sans'" fontWeight={isTU ? 700 : 400}>{u.l1}</text>
-                  <text x={x + cellW/2} y={65} textAnchor="middle" fill={isTU ? "#6366f1" : "#2d3748"} fontSize={9} fontFamily="'DM Sans'">{u.l2}</text>
+                  <text x={x + cellW/2} y={52} textAnchor="middle" fill={isTU ? "#a5b4fc" : isWE ? T.txtFaint : T.txtMuted} fontSize={view === "quarter" ? 14 : 11} fontFamily="'DM Sans'" fontWeight={isTU ? 700 : 400}>{u.l1}</text>
+                  <text x={x + cellW/2} y={65} textAnchor="middle" fill={isTU ? "#6366f1" : T.txtVeryFaint} fontSize={9} fontFamily="'DM Sans'">{u.l2}</text>
                 </g>
               );
             })}
@@ -775,12 +832,12 @@ export default function GanttChart() {
               return (
                 <g key={task.id} className="task-row" onMouseEnter={() => setHoveredId(task.id)} onMouseLeave={() => setHoveredId(null)}
                   style={reordering && reordering.id === task.id ? { opacity: 0.35 } : undefined}>
-                  {isH && <rect x={NAME_W} y={y+1} width={totalW - NAME_W} height={ROW_H-1} fill="#ffffff05" />}
+                  {isH && <rect x={NAME_W} y={y+1} width={totalW - NAME_W} height={ROW_H-1} fill={T.hoverRow} />}
                   <g style={{ cursor: reordering ? "grabbing" : "grab", opacity: isH ? 0.7 : 0.25 }}
                     onMouseDown={e => startReorder(e, task.id, i)}>
-                    <rect x={3} y={y+15} width={11} height={2} rx={1} fill="#9ca3af" />
-                    <rect x={3} y={y+21} width={11} height={2} rx={1} fill="#9ca3af" />
-                    <rect x={3} y={y+27} width={11} height={2} rx={1} fill="#9ca3af" />
+                    <rect x={3} y={y+15} width={11} height={2} rx={1} fill={T.handle} />
+                    <rect x={3} y={y+21} width={11} height={2} rx={1} fill={T.handle} />
+                    <rect x={3} y={y+27} width={11} height={2} rx={1} fill={T.handle} />
                   </g>
                   {editingId === task.id ? (
                     <foreignObject x={10} y={y+10} width={148} height={ROW_H-20}>
@@ -791,7 +848,7 @@ export default function GanttChart() {
                         style={{ width:"100%", background:"#1e1e2e", border:"1.5px solid #6366f1", borderRadius:6, color:"#fff", padding:"4px 8px", fontSize:13, fontFamily:"'DM Sans'", outline:"none" }} />
                     </foreignObject>
                   ) : (
-                    <text x={16} y={y + ROW_H/2 + 5} fill="#c4c4d4" fontSize={13} fontFamily="'DM Sans'"
+                    <text x={16} y={y + ROW_H/2 + 5} fill={T.txtTask} fontSize={13} fontFamily="'DM Sans'"
                       style={{ cursor:"text", userSelect:"none" }}
                       onDoubleClick={() => startEdit(task.id, task.name)}>
                       {task.name.length > 18 ? task.name.slice(0,17) + "…" : task.name}
@@ -812,8 +869,8 @@ export default function GanttChart() {
                     )}
                   </foreignObject>
                   <g className="del-btn" style={{ opacity:0, cursor:"pointer" }} onClick={() => delTask(task.id)}>
-                    <rect x={NAME_W-26} y={y + ROW_H/2-10} width={20} height={20} rx={4} fill="#2a1f1f" />
-                    <text x={NAME_W-16} y={y + ROW_H/2+5} textAnchor="middle" fill="#ef4444" fontSize={14}>×</text>
+                    <rect x={NAME_W-26} y={y + ROW_H/2-10} width={20} height={20} rx={4} fill={T.delBg} />
+                    <text x={NAME_W-16} y={y + ROW_H/2+5} textAnchor="middle" fill={T.delFg} fontSize={14}>×</text>
                   </g>
                   <g className="bg">
                     <rect x={BX+2} y={BY+3} width={BW} height={BH} rx={6} fill={c.bg} opacity={0.2} />
@@ -839,7 +896,7 @@ export default function GanttChart() {
             )}
             <g style={{ cursor:"pointer" }} onClick={addTask}>
               <rect x={0} y={HEADER_H + tasks.length*ROW_H} width={NAME_W} height={38} fill="transparent" />
-              <text x={16} y={HEADER_H + tasks.length*ROW_H + 24} fill="#374151" fontSize={13} fontFamily="'DM Sans'">+ Add task…</text>
+              <text x={16} y={HEADER_H + tasks.length*ROW_H + 24} fill={T.addTask} fontSize={13} fontFamily="'DM Sans'">+ Add task…</text>
             </g>
           </svg>
           </div>
@@ -848,12 +905,12 @@ export default function GanttChart() {
         <div style={{ display:"flex", gap:16, marginTop:14, padding:"0 4px", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center" }}>
           <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
             {[["⟺","Drag"], ["↕","Reorder"], ["◂▸","Resize"], ["✎","Rename"], ["📅","Dates (click END DATE/DURATION to toggle)"], ["●","Color"], ["💾","Save version"], ["🗂","Projects"]].map(([icon, text], i) => (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:5, color:"#4b5563", fontSize:11 }}>
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:5, color:T.txtMuted, fontSize:11 }}>
                 <span style={{ color:"#6366f1" }}>{icon}</span>{text}
               </div>
             ))}
           </div>
-          <div style={{ color:"#374151", fontSize:11 }}>
+          <div style={{ color:T.txtFaint, fontSize:11 }}>
             <span style={{ color:"#10b981" }}>↓</span> xlsx: Task List · Day · Week · Month · Quarter · Year
           </div>
         </div>
