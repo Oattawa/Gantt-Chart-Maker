@@ -316,6 +316,7 @@ export default function GanttChart() {
   const [editName,  setEditName]  = useState("");
   const [hoveredId, setHoveredId] = useState(null);
   const [dragging,  setDragging]  = useState(null);
+  const [reordering, setReordering] = useState(null); // { id, fromIdx, curIdx, sy }
   const [xlsxReady, setXlsxReady] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [projects,  setProjects]  = useState(() => ({
@@ -364,6 +365,12 @@ export default function GanttChart() {
     setDragging({ id, type, sx: e.clientX, os: new Date(t.start), oe: new Date(t.end) });
   }, [tasks]);
 
+  const startReorder = useCallback((e, id, fromIdx) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setReordering({ id, fromIdx, curIdx: fromIdx, sy: e.clientY });
+  }, []);
+
   useEffect(() => {
     if (!dragging) return;
     const mv = e => {
@@ -388,6 +395,28 @@ export default function GanttChart() {
     window.addEventListener("mouseup", up);
     return () => { window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); };
   }, [dragging, cellW, view, vs]);
+
+  useEffect(() => {
+    if (!reordering) return;
+    const mv = e => {
+      const dy = e.clientY - reordering.sy;
+      const newIdx = Math.max(0, Math.min(tasks.length - 1, reordering.fromIdx + Math.round(dy / ROW_H)));
+      if (newIdx !== reordering.curIdx) setReordering(prev => ({ ...prev, curIdx: newIdx }));
+    };
+    const up = () => {
+      setTasks(prev => {
+        if (reordering.curIdx === reordering.fromIdx) return prev;
+        const arr = [...prev];
+        const [item] = arr.splice(reordering.fromIdx, 1);
+        arr.splice(reordering.curIdx, 0, item);
+        return arr;
+      });
+      setReordering(null);
+    };
+    window.addEventListener("mousemove", mv);
+    window.addEventListener("mouseup", up);
+    return () => { window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); };
+  }, [reordering, tasks.length]);
 
   const startEdit = (id, name) => { setEditingId(id); setEditName(name); setTimeout(() => inputRef.current && inputRef.current.focus(), 50); };
   const commit    = () => { if (editName.trim()) setTasks(p => p.map(t => t.id === editingId ? { ...t, name: editName.trim() } : t)); setEditingId(null); };
@@ -713,8 +742,15 @@ export default function GanttChart() {
               const BX = getBX(task), BW = getBW(task), BY = y + 9, BH = ROW_H - 18;
               const isH = hoveredId === task.id;
               return (
-                <g key={task.id} className="task-row" onMouseEnter={() => setHoveredId(task.id)} onMouseLeave={() => setHoveredId(null)}>
+                <g key={task.id} className="task-row" onMouseEnter={() => setHoveredId(task.id)} onMouseLeave={() => setHoveredId(null)}
+                  style={reordering && reordering.id === task.id ? { opacity: 0.35 } : undefined}>
                   {isH && <rect x={NAME_W} y={y+1} width={totalW - NAME_W} height={ROW_H-1} fill="#ffffff05" />}
+                  <g style={{ cursor: reordering ? "grabbing" : "grab", opacity: isH ? 0.7 : 0.25 }}
+                    onMouseDown={e => startReorder(e, task.id, i)}>
+                    <rect x={3} y={y+15} width={11} height={2} rx={1} fill="#9ca3af" />
+                    <rect x={3} y={y+21} width={11} height={2} rx={1} fill="#9ca3af" />
+                    <rect x={3} y={y+27} width={11} height={2} rx={1} fill="#9ca3af" />
+                  </g>
                   {editingId === task.id ? (
                     <foreignObject x={10} y={y+10} width={NAME_W-20} height={ROW_H-20}>
                       <input ref={inputRef} value={editName}
@@ -752,6 +788,10 @@ export default function GanttChart() {
                 </g>
               );
             })}
+            {/* Drop indicator */}
+            {reordering && reordering.curIdx !== reordering.fromIdx && (
+              <rect x={0} y={HEADER_H + reordering.curIdx * ROW_H - 1} width={totalW} height={3} rx={1.5} fill="#6366f1" opacity={0.85} />
+            )}
             <g style={{ cursor:"pointer" }} onClick={addTask}>
               <rect x={0} y={HEADER_H + tasks.length*ROW_H} width={NAME_W} height={38} fill="transparent" />
               <text x={16} y={HEADER_H + tasks.length*ROW_H + 24} fill="#374151" fontSize={13} fontFamily="'DM Sans'">+ Add task…</text>
@@ -761,7 +801,7 @@ export default function GanttChart() {
 
         <div style={{ display:"flex", gap:16, marginTop:14, padding:"0 4px", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center" }}>
           <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
-            {[["⟺","Drag"], ["◂▸","Resize"], ["✎","Rename"], ["●","Color"], ["💾","Save version"], ["🗂","Projects"]].map(([icon, text], i) => (
+            {[["⟺","Drag"], ["↕","Reorder"], ["◂▸","Resize"], ["✎","Rename"], ["●","Color"], ["💾","Save version"], ["🗂","Projects"]].map(([icon, text], i) => (
               <div key={i} style={{ display:"flex", alignItems:"center", gap:5, color:"#4b5563", fontSize:11 }}>
                 <span style={{ color:"#6366f1" }}>{icon}</span>{text}
               </div>
