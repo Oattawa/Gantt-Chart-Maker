@@ -714,8 +714,9 @@ export default function GanttChart() {
       )}
 
       {/* ── Gantt ── */}
-      <div style={{ maxWidth:1120, margin:"0 auto", padding:"0 24px", overflowX:"auto" }}>
+      <div style={{ maxWidth:1120, margin:"0 auto", padding:"0 24px" }}>
         <div style={{ background:"#16161d", borderRadius:16, border:"1px solid #1e1e2e", overflow:"hidden", boxShadow:"0 20px 60px rgba(0,0,0,.5)" }}>
+          <div style={{ overflowX:"auto" }}>
           <svg width={totalW} height={totalH} style={{ display:"block" }}>
             {/* Column BG */}
             {units.map((u, i) => {
@@ -841,6 +842,7 @@ export default function GanttChart() {
               <text x={16} y={HEADER_H + tasks.length*ROW_H + 24} fill="#374151" fontSize={13} fontFamily="'DM Sans'">+ Add task…</text>
             </g>
           </svg>
+          </div>
         </div>
 
         <div style={{ display:"flex", gap:16, marginTop:14, padding:"0 4px", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center" }}>
