@@ -601,7 +601,7 @@ export default function GanttChart() {
       `}</style>
 
       {/* ── Top bar ── */}
-      <div style={{ maxWidth:1120, margin:"0 auto", padding:"0 24px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
+      <div style={{ padding:"0 24px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
         <div style={{ display:"flex", alignItems:"center", gap:14 }}>
           <div>
             <h1 style={{ color:T.txtPrimary, margin:0, fontSize:22, fontFamily:"'Space Grotesk'", letterSpacing:"-0.5px" }}>📅 Gantt Timeline</h1>
@@ -645,7 +645,7 @@ export default function GanttChart() {
 
       {/* ── Save version bar ── */}
       {savingAs && (
-        <div style={{ maxWidth:1120, margin:"0 auto", padding:"0 24px 14px" }}>
+        <div style={{ padding:"0 24px 14px" }}>
           <div style={{ background:"#1a1a2e", border:"1px solid #2a2a4a", borderRadius:12, padding:"14px 18px", display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
             <span style={{ color:"#a5b4fc", fontSize:13, fontFamily:"'Space Grotesk'", fontWeight:600 }}>
               💾 Save to: <em style={{ color:"#fff" }}>{activeProject}</em>
@@ -662,7 +662,7 @@ export default function GanttChart() {
 
       {/* ── Project panel ── */}
       {showPanel && (
-        <div style={{ maxWidth:1120, margin:"0 auto", padding:"0 24px 16px" }}>
+        <div style={{ padding:"0 24px 16px" }}>
           <div style={{ background:"#13131a", border:"1px solid #1e1e2e", borderRadius:14, padding:18, display:"flex", gap:20, flexWrap:"wrap" }}>
             {/* Projects */}
             <div style={{ flex:"0 0 200px" }}>
@@ -755,7 +755,7 @@ export default function GanttChart() {
       )}
 
       {/* ── Gantt ── */}
-      <div style={{ maxWidth:1120, margin:"0 auto", padding:"0 24px" }}>
+      <div style={{ padding:"0 24px" }}>
         <div style={{ background:T.card, borderRadius:16, border:`1px solid ${T.border}`, overflow:"hidden", boxShadow:"0 20px 60px rgba(0,0,0,.3)" }}>
           {/* Schedule name header */}
           <div style={{ background:T.schNameBg, borderBottom:`1px solid ${T.schNameBorder}`, padding:"12px 20px", display:"flex", alignItems:"center", gap:10 }}>
