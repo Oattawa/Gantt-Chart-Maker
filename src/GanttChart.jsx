@@ -5,7 +5,7 @@ const ROW_H = 44, NAME_W = 440, HEADER_H = 72;
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 const VIEW_CONFIG = {
-  day:     { cellW: 36,  unitCount: 35 },
+  day:     { cellW: 36,  unitCount: 90 },
   week:    { cellW: 90,  unitCount: 16 },
   month:   { cellW: 80,  unitCount: 12 },
   quarter: { cellW: 120, unitCount: 8  },
@@ -369,7 +369,10 @@ export default function GanttChart() {
   const inputRef   = useRef(null);
   const projRef    = useRef(null);
   const importRef  = useRef(null);
-  const [importMsg, setImportMsg] = useState("");
+  const svgRef     = useRef(null);
+  const [importMsg,   setImportMsg]   = useState("");
+  const [copyingPng,  setCopyingPng]  = useState(false);
+  const [copyMsg,     setCopyMsg]     = useState("");
 
   useEffect(() => {
     if (window.XLSX) { setXlsxReady(true); return; }
@@ -486,6 +489,71 @@ export default function GanttChart() {
     setExporting(false);
   };
 
+  // ── PNG / clipboard export ───────────────────────────────────────────────
+  const exportPNG = useCallback(async () => {
+    if (!svgRef.current) return;
+    setCopyingPng(true);
+    setCopyMsg("");
+    const NS = "http://www.w3.org/2000/svg";
+    const clone = svgRef.current.cloneNode(true);
+
+    // Remove interactive foreignObjects (date inputs)
+    clone.querySelectorAll("foreignObject").forEach(fo => fo.remove());
+
+    // Add static date text in their place
+    tasks.forEach((task, i) => {
+      const y = HEADER_H + i * ROW_H;
+      const mkTxt = (x, content) => {
+        const t = document.createElementNS(NS, "text");
+        t.setAttribute("x", String(x));
+        t.setAttribute("y", String(y + 23));
+        t.setAttribute("fill", T.inFg);
+        t.setAttribute("font-size", "10");
+        t.setAttribute("font-family", "DM Sans,Arial,sans-serif");
+        t.textContent = content;
+        return t;
+      };
+      clone.appendChild(mkTxt(170, fmtISO(task.start)));
+      clone.appendChild(mkTxt(286, dateMode === "end" ? fmtISO(task.end) : `${diffDays(task.start, task.end)}d`));
+    });
+
+    // Serialize SVG → Blob → Image → Canvas
+    const svgStr = new XMLSerializer().serializeToString(clone);
+    const svgBlob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+    const scale = 2;
+    const canvas = document.createElement("canvas");
+    canvas.width  = totalW * scale;
+    canvas.height = totalH * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.fillStyle = T.card;
+    ctx.fillRect(0, 0, totalW, totalH);
+
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(async blob => {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          setCopyMsg("✅ Copied! Press Ctrl+V in PowerPoint");
+        } catch {
+          // Clipboard API blocked — fall back to download
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = (scheduleName || "gantt") + ".png";
+          a.click();
+          setCopyMsg("📥 Downloaded as PNG");
+        }
+        setCopyingPng(false);
+        setTimeout(() => setCopyMsg(""), 4000);
+      }, "image/png");
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); setCopyingPng(false); };
+    img.src = url;
+  }, [tasks, totalW, totalH, T, dateMode, scheduleName]);
+
   // Project / version actions
   const saveVersion = () => {
     const label = versionNote.trim() || ("v" + ((projects[activeProject] && projects[activeProject].versions ? projects[activeProject].versions.length : 0) + 1));
@@ -580,7 +648,7 @@ export default function GanttChart() {
   const versions  = (projects[activeProject] && projects[activeProject].versions) ? projects[activeProject].versions : [];
 
   return (
-    <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:T.page, minHeight:"100vh", padding:"24px 0", transition:"background .25s" }}>
+    <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:T.page, height:"100vh", display:"flex", flexDirection:"column", overflow:"hidden", transition:"background .25s" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
         * { box-sizing:border-box }
@@ -601,7 +669,7 @@ export default function GanttChart() {
       `}</style>
 
       {/* ── Top bar ── */}
-      <div style={{ padding:"0 24px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
+      <div style={{ flexShrink:0, padding:"12px 24px 10px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
         <div style={{ display:"flex", alignItems:"center", gap:14 }}>
           <div>
             <h1 style={{ color:T.txtPrimary, margin:0, fontSize:22, fontFamily:"'Space Grotesk'", letterSpacing:"-0.5px" }}>📅 Gantt Timeline</h1>
@@ -630,6 +698,17 @@ export default function GanttChart() {
             style={{ background: theme === "dark" ? "#1a1a2e" : "#f0f4f8", border: theme === "dark" ? "1px solid #2a2a4a" : "1px solid #cbd5e1", borderRadius:10, color: theme === "dark" ? "#fbbf24" : "#6366f1", padding:"9px 14px", cursor:"pointer", fontFamily:"'Space Grotesk'", fontSize:13, fontWeight:600 }}>
             {theme === "dark" ? "☀︎" : "☾"}
           </button>
+          <div style={{ position:"relative", display:"inline-block" }}>
+            <button className="xbtn" onClick={exportPNG} disabled={copyingPng}
+              style={{ background:"linear-gradient(135deg,#1d4ed8,#6366f1)", border:"none", borderRadius:10, color:"#fff", padding:"9px 16px", cursor: copyingPng ? "wait" : "pointer", fontFamily:"'Space Grotesk'", fontSize:13, fontWeight:600, boxShadow:"0 4px 16px rgba(99,102,241,.35)", display:"flex", alignItems:"center", gap:6, transition:"all .2s" }}>
+              {copyingPng ? "⏳ Rendering…" : "📋 Copy for PPT"}
+            </button>
+            {copyMsg && (
+              <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"6px 12px", color:"#e2e8f0", fontSize:11, fontFamily:"'DM Sans'", whiteSpace:"nowrap", zIndex:99 }}>
+                {copyMsg}
+              </div>
+            )}
+          </div>
           <button className="xbtn" onClick={handleExport} disabled={exporting || !xlsxReady}
             style={{ background:"linear-gradient(135deg,#047857,#10b981)", border:"none", borderRadius:10, color:"#fff", padding:"9px 16px", cursor: (exporting || !xlsxReady) ? "not-allowed" : "pointer", fontFamily:"'Space Grotesk'", fontSize:13, fontWeight:600, boxShadow:"0 4px 16px rgba(16,185,129,.35)", display:"flex", alignItems:"center", gap:6, transition:"all .2s", opacity: xlsxReady ? 1 : 0.6 }}>
             {exporting ? (
@@ -645,7 +724,7 @@ export default function GanttChart() {
 
       {/* ── Save version bar ── */}
       {savingAs && (
-        <div style={{ padding:"0 24px 14px" }}>
+        <div style={{ flexShrink:0, padding:"0 24px 10px" }}>
           <div style={{ background:"#1a1a2e", border:"1px solid #2a2a4a", borderRadius:12, padding:"14px 18px", display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
             <span style={{ color:"#a5b4fc", fontSize:13, fontFamily:"'Space Grotesk'", fontWeight:600 }}>
               💾 Save to: <em style={{ color:"#fff" }}>{activeProject}</em>
@@ -662,7 +741,7 @@ export default function GanttChart() {
 
       {/* ── Project panel ── */}
       {showPanel && (
-        <div style={{ padding:"0 24px 16px" }}>
+        <div style={{ flexShrink:0, padding:"0 24px 10px" }}>
           <div style={{ background:"#13131a", border:"1px solid #1e1e2e", borderRadius:14, padding:18, display:"flex", gap:20, flexWrap:"wrap" }}>
             {/* Projects */}
             <div style={{ flex:"0 0 200px" }}>
@@ -755,10 +834,10 @@ export default function GanttChart() {
       )}
 
       {/* ── Gantt ── */}
-      <div style={{ padding:"0 24px" }}>
-        <div style={{ background:T.card, borderRadius:16, border:`1px solid ${T.border}`, overflow:"hidden", boxShadow:"0 20px 60px rgba(0,0,0,.3)" }}>
+      <div style={{ flex:1, display:"flex", flexDirection:"column", padding:"0 24px 0", overflow:"hidden", minHeight:0 }}>
+        <div style={{ flex:1, display:"flex", flexDirection:"column", background:T.card, borderRadius:16, border:`1px solid ${T.border}`, overflow:"hidden", boxShadow:"0 8px 32px rgba(0,0,0,.15)", minHeight:0 }}>
           {/* Schedule name header */}
-          <div style={{ background:T.schNameBg, borderBottom:`1px solid ${T.schNameBorder}`, padding:"12px 20px", display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ flexShrink:0, background:T.schNameBg, borderBottom:`1px solid ${T.schNameBorder}`, padding:"10px 20px", display:"flex", alignItems:"center", gap:10 }}>
             {editingSched ? (
               <input ref={schedInputRef} value={schedDraft}
                 onChange={e => setSchedDraft(e.target.value)}
@@ -773,8 +852,8 @@ export default function GanttChart() {
             )}
             <span style={{ color:T.schNameSub, fontSize:11, fontFamily:"'DM Sans'" }}>· double-click to rename</span>
           </div>
-          <div style={{ overflowX:"auto" }}>
-          <svg width={totalW} height={totalH} style={{ display:"block" }}>
+          <div style={{ flex:1, overflowX:"auto", overflowY:"auto", minHeight:0 }}>
+          <svg ref={svgRef} width={totalW} height={totalH} style={{ display:"block" }}>
             {/* Column BG */}
             {units.map((u, i) => {
               const x = NAME_W + i * cellW;
@@ -902,7 +981,7 @@ export default function GanttChart() {
           </div>
         </div>
 
-        <div style={{ display:"flex", gap:16, marginTop:14, padding:"0 4px", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ flexShrink:0, display:"flex", gap:16, marginTop:8, padding:"0 4px 10px", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center" }}>
           <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
             {[["⟺","Drag"], ["↕","Reorder"], ["◂▸","Resize"], ["✎","Rename"], ["📅","Dates (click END DATE/DURATION to toggle)"], ["●","Color"], ["💾","Save version"], ["🗂","Projects"]].map(([icon, text], i) => (
               <div key={i} style={{ display:"flex", alignItems:"center", gap:5, color:T.txtMuted, fontSize:11 }}>
